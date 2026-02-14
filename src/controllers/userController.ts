@@ -1,31 +1,25 @@
 import type { Request, Response } from "express";
-import type { User } from "../types";
-import { USERS } from "../storage/InMemoryStorage";
+import * as UserService from "../services/userService";
 
 export function getUsers(req: Request, res: Response) {
-  res.json({ data: USERS });
+  const users = UserService.getAllUsers();
+  res.json({ data: users });
 }
 
 export function getUserById(req: Request, res: Response) {
   const { id } = req.params;
-  const user = USERS.find((user) => user.id === id);
-  if (!user) {
-    return res.status(404).json({ error: "User not found" });
+  const result = UserService.getUserById(id);
+  if (!result.success) {
+    return res.status(404).json({ error: result.error });
   }
-  res.json({ data: user });
+  res.json({ data: result.data });
 }
 
 export function createUser(req: Request, res: Response) {
   const { name, email } = req.body;
-  const existingUser = USERS.find((user) => user.email === email);
-  if (existingUser) {
-    return res.status(409).json({ error: "User with this email already exists" });
+  const result = UserService.createUser(name, email);
+  if (!result.success) {
+    return res.status(409).json({ error: result.error });
   }
-  const newUser: User = {
-    id: crypto.randomUUID(),
-    name,
-    email,
-  };
-  USERS.push(newUser);
-  res.status(201).json({ data: newUser });
+  res.status(201).json({ data: result.data });
 }
