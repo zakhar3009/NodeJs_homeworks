@@ -1,25 +1,26 @@
 import type { Request, Response } from "express";
 import * as UserService from "../services/userService";
+import type { RequestWithUser } from "../middleware/auth";
 
-export function getUsers(req: Request, res: Response) {
-  const users = UserService.getAllUsers();
+export async function getUsers(req: Request, res: Response) {
+  const users = await UserService.getAllUsers();
   res.json({ data: users });
 }
 
-export function getUserById(req: Request, res: Response) {
-  const { id } = req.params;
-  const result = UserService.getUserById(id);
+export async function getUserById(req: Request, res: Response) {
+  const id = parseInt(req.params.id as string, 10);
+  const result = await UserService.getUserById(id);
   if (!result.success) {
     return res.status(404).json({ error: result.error });
   }
   res.json({ data: result.data });
 }
 
-export function createUser(req: Request, res: Response) {
-  const { name, email } = req.body;
-  const result = UserService.createUser(name, email);
+export async function getMe(req: Request, res: Response) {
+  const id = (req as RequestWithUser).user.id;
+  const result = await UserService.getUserById(id);
   if (!result.success) {
-    return res.status(409).json({ error: result.error });
+    return res.status(404).json({ error: result.error });
   }
-  res.status(201).json({ data: result.data });
+  res.json({ data: result.data });
 }

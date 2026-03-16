@@ -1,85 +1,51 @@
-import type { Book } from "../types";
-import { BOOKS } from "../storage/InMemoryStorage";
+import prisma from "../lib/prisma";
 
-export function getAllBooks(): Book[] {
-  return BOOKS;
+export async function getAllBooks() {
+  return prisma.book.findMany();
 }
 
-export function getBookById(id: string): {
-  success: boolean;
-  data?: Book;
-  error?: string;
-} {
-  const book = BOOKS.find((book) => book.id === id);
-  if (!book) {
-    return { success: false, error: "Book not found" };
+export async function getBookById(id: number) {
+  const book = await prisma.book.findUnique({ where: { id } });
+  if (book === null) {
+    return { success: false as const, error: "Book not found" };
   }
-  return { success: true, data: book };
+  return { success: true as const, data: book };
 }
 
-export function createBook(
-  title: string,
-  author: string,
-  year: number,
-  isbn: string
-): {
-  success: boolean;
-  data?: Book;
-  error?: string;
-} {
-  const existingBook = BOOKS.find((book) => book.isbn === isbn);
-  if (existingBook) {
-    return { success: false, error: "Book with this ISBN already exists" };
+export async function createBook(title: string, author: string, year: number, isbn: string) {
+  const existingBook = await prisma.book.findUnique({ where: { isbn } });
+  if (existingBook !== null) {
+    return { success: false as const, error: "Book with this ISBN already exists" };
   }
-  const newBook: Book = {
-    id: crypto.randomUUID(),
-    title,
-    author,
-    year,
-    isbn,
-    available: true,
-  };
-  BOOKS.push(newBook);
-  return { success: true, data: newBook };
+  const newBook = await prisma.book.create({
+    data: { title, author, year, isbn },
+  });
+  return { success: true as const, data: newBook };
 }
 
-export function updateBook(
-  id: string,
-  title: string,
-  author: string,
-  year: number,
-  isbn: string
-): {
-  success: boolean;
-  data?: Book;
-  error?: string;
-} {
-  const bookIndex = BOOKS.findIndex((book) => book.id === id);
-  if (bookIndex === -1) {
-    return { success: false, error: "Book not found" };
+export async function updateBook(id: number, title: string, author: string, year: number, isbn: string) {
+  const existingBook = await prisma.book.findFirst({
+    where: { isbn, NOT: { id } },
+  });
+  if (existingBook !== null) {
+    return { success: false as const, error: "Book with this ISBN already exists" };
   }
-  const existingBook = BOOKS.find((book) => book.isbn === isbn && book.id !== id);
-  if (existingBook) {
-    return { success: false, error: "Book with this ISBN already exists" };
+  try {
+    const book = await prisma.book.update({
+      where: { id },
+      data: { title, author, year, isbn },
+    });
+    return { success: true as const, data: book };
+  } catch {
+    return { success: false as const, error: "Book not found" };
   }
-  BOOKS[bookIndex] = {
-    ...BOOKS[bookIndex],
-    title,
-    author,
-    year,
-    isbn,
-  };
-  return { success: true, data: BOOKS[bookIndex] };
 }
 
-export function deleteBook(id: string): {
-  success: boolean;
-  error?: string;
-} {
-  const bookIndex = BOOKS.findIndex((book) => book.id === id);
-  if (bookIndex === -1) {
-    return { success: false, error: "Book not found" };
+export async function deleteBook(id: number) {
+  try {
+    await prisma.book.delete({ where: { id } });
+    return { success: true as const };
+  } catch {
+    return { success: false as const, error: "Book not found" };
   }
-  BOOKS.splice(bookIndex, 1);
-  return { success: true };
 }

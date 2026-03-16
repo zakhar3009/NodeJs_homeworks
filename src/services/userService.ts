@@ -1,36 +1,25 @@
-import type { User } from "../types";
-import { USERS } from "../storage/InMemoryStorage";
+import prisma from "../lib/prisma";
 
-export function getAllUsers(): User[] {
-  return USERS;
+const userSelect = {
+  id: true,
+  name: true,
+  email: true,
+  role: true,
+  createdAt: true,
+  updatedAt: true,
+};
+
+export async function getAllUsers() {
+  return prisma.user.findMany({ select: userSelect });
 }
 
-export function getUserById(id: string): {
-  success: boolean;
-  data?: User;
-  error?: string;
-} {
-  const user = USERS.find((user) => user.id === id);
-  if (!user) {
-    return { success: false, error: "User not found" };
+export async function getUserById(id: number) {
+  const user = await prisma.user.findUnique({
+    where: { id },
+    select: userSelect,
+  });
+  if (user === null) {
+    return { success: false as const, error: "User not found" };
   }
-  return { success: true, data: user };
-}
-
-export function createUser(name: string, email: string): {
-  success: boolean;
-  data?: User;
-  error?: string;
-} {
-  const existingUser = USERS.find((user) => user.email === email);
-  if (existingUser) {
-    return { success: false, error: "User with this email already exists" };
-  }
-  const newUser: User = {
-    id: crypto.randomUUID(),
-    name,
-    email,
-  };
-  USERS.push(newUser);
-  return { success: true, data: newUser };
+  return { success: true as const, data: user };
 }
