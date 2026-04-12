@@ -2,14 +2,16 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { StringValue } from "ms";
 
-import type { Request, Response } from "express";
+import type { NextFunction, Request, Response } from "express";
 
-import type { RegisterDTO, LoginDTO } from "../schemas/auth.schema";
+import type { RegisterDTO, LoginDTO, RequestPasswordResetDTO, ResetPasswordDTO } from "../schemas/auth.schema";
 import type { RequestWithUser } from "../middleware/auth";
 import type { JWTPayload } from "../types/jwt";
+import type { ResetPasswordPayload } from "../types/auth";
 
 import prisma from "../lib/prisma";
 import CONFIG from "../config";
+import sendMail from "../utils/sendMail";
 
 export async function registerController(req: Request<{}, {}, RegisterDTO>, res: Response) {
   const { name, email, password } = req.body;
@@ -94,6 +96,75 @@ export async function refreshController(req: Request, res: Response) {
     );
 
     res.json({ data: { accessToken } });
+  });
+}
+
+export async function requestPasswordResetController(
+  req: Request<{}, {}, RequestPasswordResetDTO>,
+  res: Response,
+) {
+  const { email } = req.body;
+
+  const user = await prisma.user.findUnique({
+    where: { email },
+  });
+
+  if (user !== null) {
+    const token = jwt.sign(
+      { email: user.email },
+      CONFIG.jwtSecret,
+      { expiresIn: "10m" },
+    );
+
+    try {
+      await sendMail({
+        to: user.email,
+        subject: "Reset password",
+        text: `To reset password please open this link: http://localhost:8080/reset_password?code=${token}`,
+        html: `<a href="http://localhost:8080/reset_password?code=${token}">To reset password please open this link</a>`,
+      });
+    } catch (error) {
+      console.error(error);
+    }
+  }
+
+  res.json({ message: "Message sent successfully" });
+}
+
+export async function resetPasswordController(
+  req: Request<{}, {}, ResetPasswordDTO>,
+  res: Response,
+  next: NextFunction,
+) {
+  const { password, code } = req.body;
+
+  jwt.verify(code, CONFIG.jwtSecret, async (err: jwt.VerifyErrors | null, decoded: string | jwt.JwtPayload | undefined) => {
+    if (err) {
+      if (err.name === "JsonWebTokenError") {
+        return res.status(400).json({ message: "Code is not valid" });
+      }
+
+      if (err.name === "TokenExpiredError") {
+        return res.status(400).json({ message: "Code is expired" });
+      }
+
+      return next(err);
+    }
+
+    const email = (decoded as ResetPasswordPayload).email;
+
+    try {
+      const hashedPassword = await bcrypt.hash(password, 12);
+
+      await prisma.user.update({
+        where: { email },
+        data: { password: hashedPassword },
+      });
+    } catch (error) {
+      console.error(error);
+    } finally {
+      res.json({ message: "Password changed successfully" });
+    }
   });
 }
 
